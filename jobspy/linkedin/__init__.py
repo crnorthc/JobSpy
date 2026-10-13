@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import math
 import random
+import re
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Optional
-from urllib.parse import urlparse, urlunparse, unquote
+from urllib.parse import unquote, urlparse, urlunparse
 
 import regex as re
 from bs4 import BeautifulSoup
@@ -16,29 +17,29 @@ from jobspy.linkedin.constant import headers
 from jobspy.linkedin.util import (
     is_job_remote,
     job_type_code,
-    parse_job_type,
+    parse_company_industry,
     parse_job_level,
-    parse_company_industry
+    parse_job_type,
 )
 from jobspy.model import (
-    JobPost,
-    Location,
-    JobResponse,
-    Country,
     Compensation,
+    Country,
     DescriptionFormat,
+    JobPost,
+    JobResponse,
+    Location,
     Scraper,
     ScraperInput,
     Site,
 )
 from jobspy.util import (
-    extract_emails_from_text,
+    create_logger,
+    create_session,
     currency_parser,
+    extract_emails_from_text,
     markdown_converter,
     plain_converter,
-    create_session,
     remove_attributes,
-    create_logger,
 )
 
 log = create_logger("LinkedIn")
@@ -51,7 +52,10 @@ class LinkedIn(Scraper):
     jobs_per_page = 25
 
     def __init__(
-        self, proxies: list[str] | str | None = None, ca_cert: str | None = None, user_agent: str | None = None
+        self,
+        proxies: list[str] | str | None = None,
+        ca_cert: str | None = None,
+        user_agent: str | None = None,
     ):
         """
         Initializes LinkedInScraper with the LinkedIn job search url
@@ -84,8 +88,8 @@ class LinkedIn(Scraper):
         seconds_old = (
             scraper_input.hours_old * 3600 if scraper_input.hours_old else None
         )
-        continue_search = (
-            lambda: len(job_list) < scraper_input.results_wanted and start < 1000
+        continue_search = lambda: (
+            len(job_list) < scraper_input.results_wanted and start < 1000
         )
         while continue_search():
             request_count += 1
@@ -130,7 +134,7 @@ class LinkedIn(Scraper):
                         err = f"LinkedIn response status code {response.status_code}"
                         err += f" - {response.text}"
                     log.error(err)
-                    return JobResponse(jobs=job_list)
+                    return JobResponse(jobs=job_list, too_many_requests=True)
             except Exception as e:
                 if "Proxy responded with" in str(e):
                     log.error(f"LinkedIn: Bad proxy")
@@ -215,11 +219,21 @@ class LinkedIn(Scraper):
             )
         date_posted = None
         if datetime_tag and "datetime" in datetime_tag.attrs:
-            datetime_str = datetime_tag["datetime"]
-            try:
-                date_posted = datetime.strptime(datetime_str, "%Y-%m-%d")
-            except:
-                date_posted = None
+            posted = datetime_tag.text.strip()
+            amount = self._extract_time_from_text(posted) if posted else None
+
+            if amount:
+                if "hours ago" in posted or "hour ago" in posted:
+                    date_posted = datetime.now() - timedelta(hours=amount)
+
+                if "minutes ago" in posted or "minute ago" in posted:
+                    date_posted = datetime.now() - timedelta(minutes=amount)
+            else:
+                datetime_str = datetime_tag["datetime"]
+                try:
+                    date_posted = datetime.strptime(datetime_str, "%Y-%m-%d")
+                except:
+                    date_posted = None
         job_details = {}
         if full_descr:
             job_details = self._get_job_details(job_id)
@@ -245,6 +259,14 @@ class LinkedIn(Scraper):
             company_logo=job_details.get("company_logo"),
             job_function=job_details.get("job_function"),
         )
+
+    def _extract_time_from_text(self, text: str) -> int | None:
+        digits = "".join(c for c in text if c.isdigit())
+
+        if digits != "":
+            return int(digits)
+
+        return None
 
     def _get_job_details(self, job_id: str) -> dict:
         """
