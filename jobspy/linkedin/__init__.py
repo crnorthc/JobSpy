@@ -222,12 +222,11 @@ class LinkedIn(Scraper):
             posted = datetime_tag.text.strip()
             amount = self._extract_time_from_text(posted) if posted else None
 
-            if amount:
-                if "hours ago" in posted or "hour ago" in posted:
-                    date_posted = datetime.now() - timedelta(hours=amount)
+            if amount and ("hours ago" in posted or "hour ago" in posted):
+                date_posted = datetime.now() - timedelta(hours=amount)
 
-                if "minutes ago" in posted or "minute ago" in posted:
-                    date_posted = datetime.now() - timedelta(minutes=amount)
+            elif amount and ("minutes ago" in posted or "minute ago" in posted):
+                date_posted = datetime.now() - timedelta(minutes=amount)
             else:
                 datetime_str = datetime_tag["datetime"]
                 try:
