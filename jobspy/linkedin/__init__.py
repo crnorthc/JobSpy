@@ -4,7 +4,7 @@ import math
 import random
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from typing import Optional
 from urllib.parse import unquote, urlparse, urlunparse
 
@@ -226,7 +226,7 @@ class LinkedIn(Scraper):
                 date_posted = datetime.now() - timedelta(hours=amount)
 
             elif amount and ("minutes ago" in posted or "minute ago" in posted):
-                date_posted = datetime.now() - timedelta(minutes=amount)
+                date_posted = datetime.now(UTC) - timedelta(minutes=amount)
             else:
                 datetime_str = datetime_tag["datetime"]
                 try:
