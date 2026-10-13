@@ -230,7 +230,9 @@ class LinkedIn(Scraper):
             else:
                 datetime_str = datetime_tag["datetime"]
                 try:
-                    date_posted = datetime.strptime(datetime_str, "%Y-%m-%d")
+                    date_posted = datetime.strptime(datetime_str, "%Y-%m-%d").replace(
+                        tzinfo=UTC
+                    )
                 except:
                     date_posted = None
         job_details = {}
